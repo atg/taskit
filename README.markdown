@@ -1,7 +1,8 @@
 # Taskit — Simpler NSTask
 
-Taskit is a reimplementation of NSTask with a simplified, and objc block-ready interface.
+**Taskit** is a reimplementation of `NSTask` with a simplified and block-ready interface.
 
+```objective-c
     Taskit *task = [Taskit task];
     task.launchPath = @"/bin/echo";
     [task.arguments addObject:@"Hello World"];
@@ -10,6 +11,7 @@ Taskit is a reimplementation of NSTask with a simplified, and objc block-ready i
     }
     
     [task launch];
+```
 
 ## License
 

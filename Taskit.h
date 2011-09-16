@@ -4,10 +4,10 @@
 
 #import <Foundation/Foundation.h>
 
-@interface CHTask : NSObject
+@interface Taskit : NSObject
 {
     BOOL hasLaunched;
-        
+    
     NSString *launchPath;
     NSMutableArray *arguments;
     NSMutableDictionary *environment;

@@ -8,7 +8,7 @@
     [task.arguments addObject:@"Hello World"];
     task.receivedOutputString = ^void(NSString *output) {
         NSLog(@"%@", output);
-    }
+    };
     
     [task launch];
 ```

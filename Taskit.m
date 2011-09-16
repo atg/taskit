@@ -25,8 +25,7 @@
     return [[[[self class] alloc] init] autorelease];
 }
 
-- (id)init
-{
+- (id)init {
     self = [super init];
     if (!self)
         return nil;
@@ -34,7 +33,7 @@
     arguments = [[NSMutableArray alloc] init];
     environment = [[NSMutableDictionary alloc] init];
     
-    workingDirectory = [[NSFileManager defaultManager] currentDirectoryPath];
+    self.workingDirectory = [[NSFileManager defaultManager] currentDirectoryPath];
     
     inPipe = [[NSPipe alloc] init];
     outPipe = [[NSPipe alloc] init];
@@ -49,11 +48,11 @@ static const char* CHAllocateCopyString(NSString *str) {
         return NULL;
     
     size_t copysize = ([str length] + 1) * sizeof(char);
-    const char* newString = (const char*)calloc(copysize, 1);
+    char* newString = (const char*)calloc(copysize, 1);
     if (!newString)
         return NULL;
     
-    memcpy((void*)newString, originalString, copysize);
+    memcpy(newString, originalString, copysize);
     return newString;
 }
 
@@ -102,10 +101,6 @@ static const char* CHAllocateCopyString(NSString *str) {
 
 // Execution
     pid_t p = fork();
-    if (p == -1) {
-        // Error
-        return NO;
-    }
     if (p == 0) {
         
         // Set up stdin, stdout and stderr
@@ -121,7 +116,13 @@ static const char* CHAllocateCopyString(NSString *str) {
         abort();
         return NO;
     }
-    
+    else if (p == -1) {
+        // Error
+        return NO;
+    }
+    else {
+        pid = p;
+    }
     
     isRunning = YES;
     
@@ -144,11 +145,19 @@ static const char* CHAllocateCopyString(NSString *str) {
     [[inPipe fileHandleForWriting] closeFile];
     
     if (receivedOutputData || receivedOutputString) {
+        
+        // *retain* ourself, since the notification center won't
+        CFRetain(self);
+        
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
         
         [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
     }
+    
     if (receivedErrorData || receivedErrorString) {
+        
+        CFRetain(self);
+        
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
         
         [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
@@ -174,6 +183,8 @@ static const char* CHAllocateCopyString(NSString *str) {
         if (receivedErrorString)
             receivedErrorString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
     }
+    
+    CFRelease(self);
 }
 
 
@@ -230,7 +241,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     while ([self isRunning]) {
         
-        [runloop runMode:@"CHTask" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
+        [runloop runMode:@"taskit" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
         
         delay *= 2;
         if (delay >= 1.0)

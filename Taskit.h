@@ -4,6 +4,15 @@
 
 #import <Foundation/Foundation.h>
 
+typedef enum {
+    
+    TaskitWaitFor_Exit = 1,
+    TaskitWaitFor_Output = 1 << 1,
+    TaskitWaitFor_Error = 1 << 2,
+    
+} TaskitWaitMaskComponent;
+typedef unsigned TaskitWaitMask;
+
 @interface Taskit : NSObject
 {
     BOOL hasLaunched;
@@ -31,6 +40,9 @@
     
     void (^receivedErrorData)(NSData *err);
     void (^receivedErrorString)(NSString *errString);
+    
+    NSMutableData *outputBuffer;
+    NSMutableData *errorBuffer;
 }
 
 + (id)task;

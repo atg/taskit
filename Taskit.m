@@ -4,6 +4,13 @@
 
 #import "Taskit.h"
 
+@interface Taskit ()
+
+- (void)flushOutput;
+- (void)flushError;
+
+@end
+
 @implementation Taskit
 
 @synthesize launchPath;
@@ -108,7 +115,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     if (receivedOutputData || receivedOutputString) {
                 
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[outPipe fileHandleForReading]];
+        //[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[outPipe fileHandleForReading]];
         
 //        [[outPipe fileHandleForReading] readInBackgroundAndNotify];
         [[outPipe fileHandleForReading] setReadabilityHandler:^void (NSFileHandle *h) {
@@ -125,7 +132,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     if (receivedErrorData || receivedErrorString) {
                 
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[errPipe fileHandleForReading]];
+        //[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[errPipe fileHandleForReading]];
         
 //        [[errPipe fileHandleForReading] readInBackgroundAndNotify];
         [[errPipe fileHandleForReading] setReadabilityHandler:^void (NSFileHandle *h) {
@@ -153,7 +160,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         // Set up stdin, stdout and stderr
         dup2(new_in, STDIN_FILENO);
         dup2(new_out, STDOUT_FILENO);
-        //dup2(new_err, STDERR_FILENO);
+        dup2(new_err, STDERR_FILENO);
         
         chdir(workingDirectoryPath);
         
@@ -172,10 +179,6 @@ static const char* CHAllocateCopyString(NSString *str) {
     }
         
     isRunning = YES;
-    
-//    [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-//    [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-
     
     // *retain* ourselves, since the notification center won't
     if (receivedOutputData || receivedOutputString)
@@ -199,24 +202,16 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (inputData)
         [[inPipe fileHandleForWriting] writeData:inputData];
     [[inPipe fileHandleForWriting] closeFile];
-    /*
-    if (receivedOutputData || receivedOutputString) {
-                
-        [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-    }
     
-    if (receivedErrorData || receivedErrorString) {
-                
-        [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-    }
-    */
     return YES;
 }
+/*
 - (void)flushAll {
     NSLog(@"Flushing: %@ %@", outputBuffer, errorBuffer);
     [self flushOutput];
     [self flushError];
 }
+ */
 - (void)flushOutput {
     if (outputBuffer) {
         if (receivedOutputData)
@@ -244,24 +239,10 @@ static const char* CHAllocateCopyString(NSString *str) {
         CFRelease(self);
     }
 }
+/*
 - (void)fileHandleDataAvailable:(NSNotification *)notif {
     
     NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
-    NSLog(@"[notif object] = %@", [notif object]);
-    /*if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
-        
-        if (receivedOutputData)
-            receivedOutputData(data);
-        if (receivedOutputString)
-            receivedOutputString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
-    }
-    else if ([[notif object] isEqual:[errPipe fileHandleForReading]]) {
-        
-        if (receivedErrorData)
-            receivedErrorData(data);
-        if (receivedErrorString)
-            receivedErrorString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
-    }*/
     
     if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
         if (!outputBuffer)
@@ -282,6 +263,7 @@ static const char* CHAllocateCopyString(NSString *str) {
             [self flushError];
     }
 }
+ */
 
 
 - (BOOL)isRunning {
@@ -298,7 +280,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (wp == -1)
         waitpid_status = 0;
     
-    [self flushOutput];
+    //[self flushOutput];
     
     isRunning = NO;
     return isRunning;
@@ -346,134 +328,105 @@ static const char* CHAllocateCopyString(NSString *str) {
             delay = 1.0;
     }
 }
-/*
-- (void)waitFor:(TaskitWaitMask)waitMask {
-    
-    NSRunLoop *runloop = [NSRunLoop currentRunLoop];
-    NSTimeInterval delay = 0.01;
-    
-    while ([self isRunning]) {
-        
-        [runloop runMode:@"taskit" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
-        
-        delay *= 2;
-        if (delay >= 1.0)
-            delay = 1.0;
-    }
-}
-*/
 - (NSData *)waitForOutput {
-    //[[outPipe fileHandleForWriting] closeFile];
-    NSLog(@"WAIT FOR OUTPUT");
-   
-    NSMutableData *data = [NSMutableData data];
-    unsigned char buf[200];
-    int fd = [[outPipe fileHandleForReading] fileDescriptor];
     
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    NSData *ret = nil;
+    [self waitForOutputData:&ret errorData:NULL];
     
-    while (1) {
-        //        if (![self isRunning])
-        //            break;
-        
-        ssize_t ex = read(fd, buf, 200);
-        NSLog(@"\t ex = %ld", ex);
-        if (ex == -1 && errno == EAGAIN)
-            continue;
-        if (ex == -1) {
-            NSLog(@"%d", errno);
-            return data;
-        }
-        if (ex == 0)
-            break;
-        
-        [data appendBytes:buf length:ex];
-    }
-    /*
-    
-    NSMutableData *data = [NSMutableData data];
-    unsigned char buf[200];
-    int fd = [[outPipe fileHandleForReading] fileDescriptor];
-    while (1) {
-//        if (![self isRunning])
-//            break;
-        
-        ssize_t ex = read(fd, buf, 200);
-        if (ex == -1)
-            return nil;
-        
-        if (ex == 0)
-            break;
-        
-        [data appendBytes:buf length:ex];
-    }
-    */
-    //NSData *data = [[outPipe fileHandleForReading] readDataToEndOfFile];
-    //[[outPipe fileHandleForReading] closeFile];
-    
-    return data;
+    return ret;
 }
 - (NSString *)waitForOutputString {
     
-    NSData *data = [self waitForOutput];
-    if (!data)
-        return nil;
-    return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    NSString *ret = nil;
+    [self waitForOutputString:&ret errorString:NULL];
+    
+    return ret;
 }
 // Want to either wait for it to exit, or for it to EOF
 - (NSData *)waitForError {
     
-    NSLog(@"WAIT FOR ERROR");
-    NSMutableData *data = [NSMutableData data];
-    unsigned char buf[200];
-    int fd = [[errPipe fileHandleForReading] fileDescriptor];
+    NSData *ret = nil;
+    [self waitForOutputData:NULL errorData:&ret];
     
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-    
-    while (1) {
-        //        if (![self isRunning])
-        //            break;
-        
-        ssize_t ex = read(fd, buf, 200);
-        NSLog(@"\t ex = %ld", ex);
-        if (ex == -1 && errno == EAGAIN)
-            continue;
-        if (ex == -1) {
-            NSLog(@"%d", errno);
-            return data;
-        }
-        if (ex == 0)
-            break;
-        
-        [data appendBytes:buf length:ex];
-    }
-    NSLog(@"data = %@", data);
-    /*
-    
-    NSMutableData *data = [NSMutableData data];
-    NSFileHandle *fh =[errPipe fileHandleForReading];
-    while (1) {
-        //NSLog(@"Again");
-        NSData *availableData = [fh availableData];
-        //NSLog(@"availableData = %@", availableData);
-        if (!availableData)
-            break;
-        [data appendData:availableData];
-        break;
-    }
-    //NSData *data = [[errPipe fileHandleForReading] readDataToEndOfFile];
-    //[[errPipe fileHandleForReading] closeFile];
-    */
-    return data;
+    return ret;
 }
 - (NSString *)waitForErrorString {
     
-    NSData *data = [self waitForError];
-    if (!data)
-        return nil;
-    return [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    NSString *ret = nil;
+    [self waitForOutputString:NULL errorString:&ret];
+    
+    return ret;
+}
+
+- (void)waitForOutputData:(NSData **)output errorData:(NSData **)error {
+    *output = [NSMutableData data];
+    *error = [NSMutableData data];
+    
+#define TASKIT_BUFFER_LENGTH 200
+    
+    unsigned char out_buf[TASKIT_BUFFER_LENGTH];
+    int out_fd = [[outPipe fileHandleForReading] fileDescriptor];
+    int out_flags = fcntl(out_fd, F_GETFL, 0);
+    fcntl(out_fd, F_SETFL, out_flags | O_NONBLOCK);
+
+    unsigned char err_buf[TASKIT_BUFFER_LENGTH];
+    int err_fd = [[errPipe fileHandleForReading] fileDescriptor];
+    int err_flags = fcntl(err_fd, F_GETFL, 0);
+    fcntl(err_fd, F_SETFL, err_flags | O_NONBLOCK);
+    
+    while (1) {
+        
+        if (err_fd == -1 && out_fd == -1)
+            break;
+        
+        // stdout
+        if (out_fd >= 0) {
+            NSLog(@"READING [out]: %d", out_fd);
+            ssize_t ex = read(out_fd, out_buf, TASKIT_BUFFER_LENGTH);
+            NSLog(@"\t(%d, %d)", ex, errno);
+            if (ex == -1 && errno == EAGAIN)
+                continue;
+            else if (ex == -1 && errno == EINVAL) {
+                out_fd = -1;
+            }
+            else if (ex == -1) {
+                out_fd = -1;
+            }
+            else {
+                [(NSMutableData *)*output appendBytes:out_buf length:ex];
+            }
+        }
+        
+        // stderr
+        if (err_fd >= 0) {
+            
+            NSLog(@"READING [err]: %d", out_fd);
+            ssize_t ex = read(err_fd, err_buf, TASKIT_BUFFER_LENGTH);
+            NSLog(@"\t(%d, %d)", ex, errno);
+            if (ex == -1 && errno == EAGAIN)
+                continue;
+            else if (ex == -1 && errno == EINVAL) {
+                err_fd = -1;
+            }
+            else if (ex == -1) {
+                err_fd = -1;
+            }
+            else {
+                [(NSMutableData *)*error appendBytes:err_buf length:ex];
+            }
+        }
+    }
+}
+- (void)waitForOutputString:(NSString **)output errorString:(NSString **)error {
+    NSData *outputData = nil;
+    NSData *errorData = nil;
+    
+    [self waitForOutputData:&outputData errorData:&errorData];
+    
+    if (output)
+        *output = [[[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding] autorelease];
+    if (error)
+        *error = [[[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding] autorelease];
 }
 
 

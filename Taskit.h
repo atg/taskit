@@ -78,8 +78,13 @@ typedef unsigned TaskitWaitMask;
 //TODO: - (BOOL)suspend;
 //TODO: - (BOOL)resume;
 
+- (BOOL)isRunning;
+
 #pragma mark Blocking methods
 - (void)waitUntilExit;
+
+- (void)waitForOutputData:(NSData **)output errorData:(NSData **)error;
+- (void)waitForOutputString:(NSString **)output errorString:(NSString **)error;
 
 - (NSData *)waitForOutput;
 - (NSString *)waitForOutputString;

@@ -47,8 +47,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (!originalString)
         return NULL;
     
-    size_t copysize = ([str length] + 1) * sizeof(char);
-    char* newString = (const char*)calloc(copysize, 1);
+    size_t copysize = (strlen(originalString) + 1) * sizeof(char);
+    char* newString = (char*)calloc(copysize, 1);
     if (!newString)
         return NULL;
     
@@ -95,10 +95,31 @@ static const char* CHAllocateCopyString(NSString *str) {
         envCounter += 2;
     }
     
+// Backgrounding
+    
+    if (receivedOutputData || receivedOutputString) {
+        
+        // *retain* ourself, since the notification center won't
+        CFRetain(self);
+                
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
+        
+        [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
+    }
+    
+    if (receivedErrorData || receivedErrorString) {
+        
+        CFRetain(self);
+        
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
+        
+        [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
+    }
+    
     int new_in = [[inPipe fileHandleForReading] fileDescriptor];
     int new_out = [[outPipe fileHandleForWriting] fileDescriptor];
     int new_err = [[errPipe fileHandleForWriting] fileDescriptor];
-
+    
 // Execution
     pid_t p = fork();
     if (p == 0) {
@@ -126,6 +147,12 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     isRunning = YES;
     
+    // *retain* ourselves, since the notification center won't
+    if (receivedOutputData || receivedOutputString)
+        CFRetain(self);
+    if (receivedErrorData || receivedErrorString)
+        CFRetain(self);
+    
 // Clean up
     free((void *)executablePath);
     free((void *)workingDirectoryPath);
@@ -136,33 +163,13 @@ static const char* CHAllocateCopyString(NSString *str) {
     for (size_t i = 0; i < envCounter; i++) free((void *)environmentArray[i]);
     free(environmentArray);
     
-
-// Backgrounding
+// Writing
     // We want to open stdin on p and write our input
     NSData *inputData = input ?: [inputString dataUsingEncoding:NSUTF8StringEncoding];
     if (inputData)
         [[inPipe fileHandleForWriting] writeData:inputData];
     [[inPipe fileHandleForWriting] closeFile];
     
-    if (receivedOutputData || receivedOutputString) {
-        
-        // *retain* ourself, since the notification center won't
-        CFRetain(self);
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
-        
-        [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-    }
-    
-    if (receivedErrorData || receivedErrorString) {
-        
-        CFRetain(self);
-        
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDidReadToEndofFile:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
-        
-        [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotify];
-    }
-        
     return YES;
 }
 - (void)fileHandleDidReadToEndOfFile:(NSNotification *)notif {

@@ -74,6 +74,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:launchPath])
         return NO;
     
+    [arguments insertObject:launchPath atIndex:0];
+    
     if ([arguments count] + [environment count] + 2 > ARG_MAX)
         return NO;
     
@@ -144,7 +146,6 @@ static const char* CHAllocateCopyString(NSString *str) {
         chdir(workingDirectoryPath);
         
         //sleep(1);
-        
         
         execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
         
@@ -272,8 +273,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     return ret;
 }
 
-- (void)fileHandleReadCompletion:(NSNotification *)notif {
-
+- (void)asyncFileHandleReadCompletion:(NSNotification *)notif {
+    
     NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
     
     if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
@@ -284,6 +285,12 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         hasFinishedReadingOutput = YES;
         [[outPipe fileHandleForReading] closeFile];
+        
+        
+        if (receivedOutputData)
+            receivedOutputData(data);
+        if (receivedOutputString)
+            receivedOutputString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
         
         if (hasRetainedForOutput) {
             CFRelease(self);
@@ -298,6 +305,59 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         hasFinishedReadingError = YES;        
         [[errPipe fileHandleForReading] closeFile];
+        
+        
+        if (receivedErrorData)
+            receivedErrorData(data);
+        if (receivedErrorString)
+            receivedErrorString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);	 	
+        
+        
+        if (hasRetainedForError) {
+            CFRelease(self);
+            hasRetainedForError = NO;
+        }
+    }
+}
+- (void)syncFileHandleReadCompletion:(NSNotification *)notif {
+
+    NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
+    
+    if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
+        if (!outputBuffer)
+            outputBuffer = [data copy];
+        else
+            [outputBuffer appendData:data];
+        
+        hasFinishedReadingOutput = YES;
+        [[outPipe fileHandleForReading] closeFile];
+        
+        
+        if (receivedOutputData)
+            receivedOutputData(data);
+        if (receivedOutputString)
+            receivedOutputString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+        
+        if (hasRetainedForOutput) {
+            CFRelease(self);
+            hasRetainedForOutput = NO;
+        }
+    }
+    else if ([[notif object] isEqual:[errPipe fileHandleForReading]]) {
+        if (!errorBuffer)
+            errorBuffer = [data copy];
+        else
+            [errorBuffer appendData:data];
+        
+        hasFinishedReadingError = YES;        
+        [[errPipe fileHandleForReading] closeFile];
+        
+        
+        if (receivedErrorData)
+            receivedErrorData(data);
+        if (receivedErrorString)
+            receivedErrorString([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);	 	
+        
         
         if (hasRetainedForError) {
             CFRelease(self);
@@ -316,7 +376,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     
-    while ([self isRunning]) {
+    do {
         
         if ((!output || hasFinishedReadingOutput) && (!error || hasFinishedReadingError))
             break;
@@ -326,7 +386,8 @@ static const char* CHAllocateCopyString(NSString *str) {
         delay *= 1.5;
         if (delay >= 0.1)
             delay = 0.1;
-    }
+        
+    } while (1); // [self isRunning]);
     
     [outputBuffer autorelease];
     [errorBuffer autorelease];
@@ -356,6 +417,8 @@ static const char* CHAllocateCopyString(NSString *str) {
 #pragma mark Goodbye!
 
 - (void)dealloc {
+    
+    NSLog(@"Deallocing %@", launchPath);
     
     [launchPath release];
     [arguments release];

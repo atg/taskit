@@ -46,6 +46,9 @@ typedef unsigned TaskitWaitMask;
     
     BOOL hasFinishedReadingOutput;
     BOOL hasFinishedReadingError;
+    
+    BOOL hasRetainedForOutput;
+    BOOL hasRetainedForError;
 }
 
 + (id)task;

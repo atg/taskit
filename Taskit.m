@@ -6,9 +6,6 @@
 
 @interface Taskit ()
 
-- (void)flushOutput;
-- (void)flushError;
-
 @end
 
 @implementation Taskit
@@ -77,6 +74,9 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:launchPath])
         return NO;
     
+    if ([arguments count] + [environment count] + 2 > ARG_MAX)
+        return NO;
+    
 // Set up
     // Set up launch path, arguments, environment and working directory
     const char* executablePath = CHAllocateCopyString(launchPath);
@@ -109,45 +109,23 @@ static const char* CHAllocateCopyString(NSString *str) {
         envCounter++;
     }
     
-    //TODO: Check ARG_MAX
-    
 // Backgrounding
-    
     if (receivedOutputData || receivedOutputString) {
-                
-        //[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[outPipe fileHandleForReading]];
         
-        [[outPipe fileHandleForReading] readInBackgroundAndNotify];
-        [[outPipe fileHandleForReading] setReadabilityHandler:^void (NSFileHandle *h) {
-            NSLog(@"FOUND DATA");
-            NSData *data = [h availableData];
-            if (!outputBuffer)
-                outputBuffer = [data mutableCopy];
-            else
-                [outputBuffer appendData:data];
-            
-            if (![self isRunning])
-                [self flushOutput];
-        }];
+        CFRetain(self);
+        hasRetainedForOutput = YES;
+        
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
+        [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
     if (receivedErrorData || receivedErrorString) {
                 
-        //[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleDataAvailable:) name:NSFileHandleDataAvailableNotification object:[errPipe fileHandleForReading]];
+        CFRetain(self);
+        hasRetainedForError = YES;
         
-//        [[errPipe fileHandleForReading] readInBackgroundAndNotify];
-        [[errPipe fileHandleForReading] setReadabilityHandler:^void (NSFileHandle *h) {
-            NSData *data = [h availableData];
-            NSLog(@"ERR: %@", data);
-            if (!errorBuffer)
-                errorBuffer = [data mutableCopy];
-            else
-                [errorBuffer appendData:data];
-            
-            if (![self isRunning])
-                [self flushError];
-        }];
-
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];        
+        [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
     int new_in = [[inPipe fileHandleForReading] fileDescriptor];
@@ -165,7 +143,8 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         chdir(workingDirectoryPath);
         
-        sleep(1);
+        //sleep(1);
+        
         
         execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
         
@@ -182,13 +161,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     }
         
     isRunning = YES;
-    
-    // *retain* ourselves, since the notification center won't
-    if (receivedOutputData || receivedOutputString)
-        CFRetain(self);
-    if (receivedErrorData || receivedErrorString)
-        CFRetain(self);
-    
+        
 // Clean up
     free((void *)executablePath);
     free((void *)workingDirectoryPath);
@@ -208,66 +181,6 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     return YES;
 }
-/*
-- (void)flushAll {
-    NSLog(@"Flushing: %@ %@", outputBuffer, errorBuffer);
-    [self flushOutput];
-    [self flushError];
-}
- */
-- (void)flushOutput {
-    if (outputBuffer) {
-        if (receivedOutputData)
-            receivedOutputData(outputBuffer);
-        if (receivedOutputString)
-            receivedOutputString([[[NSString alloc] initWithData:outputBuffer encoding:NSUTF8StringEncoding] autorelease]);
-        
-        [outputBuffer release];
-        outputBuffer = nil;
-        
-        CFRelease(self);
-    }
-}
-- (void)flushError {
-    if (errorBuffer) {
-        
-        if (receivedErrorData)
-            receivedErrorData(errorBuffer);
-        if (receivedErrorString)
-            receivedErrorString([[[NSString alloc] initWithData:errorBuffer encoding:NSUTF8StringEncoding] autorelease]);
-        
-        [errorBuffer release];
-        errorBuffer = nil;
-        
-        CFRelease(self);
-    }
-}
-/*
-- (void)fileHandleDataAvailable:(NSNotification *)notif {
-    
-    NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
-    
-    if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
-        if (!outputBuffer)
-            outputBuffer = [data copy];
-        else
-            [outputBuffer appendData:data];
-        
-        if (![self isRunning])
-            [self flushOutput];
-    }
-    else if ([[notif object] isEqual:[errPipe fileHandleForReading]]) {
-        if (!errorBuffer)
-            errorBuffer = [data copy];
-        else
-            [errorBuffer appendData:data];
-        
-        if (![self isRunning])
-            [self flushError];
-    }
-}
- */
-
 
 - (BOOL)isRunning {
     
@@ -282,9 +195,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     // if wp == -1, fail safely: act as though the process exited normally
     if (wp == -1)
         waitpid_status = 0;
-    
-    //[self flushOutput];
-    
+        
     isRunning = NO;
     return isRunning;
 }
@@ -324,7 +235,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     while ([self isRunning]) {
         
-        [runloop runMode:@"taskit" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
+        [runloop runMode:@"taskitwait" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
         
         delay *= 2;
         if (delay >= 1.0)
@@ -361,11 +272,9 @@ static const char* CHAllocateCopyString(NSString *str) {
     return ret;
 }
 
-- (void)wait_fileHandleDataAvailable:(NSNotification *)notif {
-    
+- (void)fileHandleReadCompletion:(NSNotification *)notif {
 
     NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
-    NSLog(@"DATA: %d", [data length]);
     
     if ([[notif object] isEqual:[outPipe fileHandleForReading]]) {
         if (!outputBuffer)
@@ -374,18 +283,12 @@ static const char* CHAllocateCopyString(NSString *str) {
             [outputBuffer appendData:data];
         
         hasFinishedReadingOutput = YES;
-        
-//        if (![self isRunning])
-//            [self flushOutput];
-        /*
-        if ([data length]) {
-            [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
-        }
-        else {
-         hasFinishedReadingOutput = YES;
-        }*/
-        
         [[outPipe fileHandleForReading] closeFile];
+        
+        if (hasRetainedForOutput) {
+            CFRelease(self);
+            hasRetainedForOutput = NO;
+        }
     }
     else if ([[notif object] isEqual:[errPipe fileHandleForReading]]) {
         if (!errorBuffer)
@@ -393,20 +296,13 @@ static const char* CHAllocateCopyString(NSString *str) {
         else
             [errorBuffer appendData:data];
         
-        hasFinishedReadingError = YES;
-        
-//        if (![self isRunning])
-//            [self flushError];
-        /*
-        if ([data length]) {
-            [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
-        }
-        else {
-            hasFinishedReadingError = YES;
-        }*/
-        
-        
+        hasFinishedReadingError = YES;        
         [[errPipe fileHandleForReading] closeFile];
+        
+        if (hasRetainedForError) {
+            CFRelease(self);
+            hasRetainedForError = NO;
+        }
     }
 }
 
@@ -414,8 +310,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     NSRunLoop *runloop = [NSRunLoop currentRunLoop];
     NSTimeInterval delay = 0.01;
     
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wait_fileHandleDataAvailable:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wait_fileHandleDataAvailable:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(fileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
     
     [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
@@ -443,102 +339,6 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (error)
         *error = errorBuffer;
 }
-
-#if 0
-- (void)waitForOutputData:(NSData **)output errorData:(NSData **)error {
-    
-    if (!output && !error)
-        return;
-    
-    if (output)
-        *output = [NSMutableData data];
-    if (error)
-        *error = [NSMutableData data];
-    
-    [[outPipe fileHandleForWriting] closeFile];
-    [[errPipe fileHandleForWriting] closeFile];
-
-    
-#define TASKIT_BUFFER_LENGTH 200
-    
-    unsigned char out_buf[TASKIT_BUFFER_LENGTH];
-    int out_fd = /*output ?*/ [[outPipe fileHandleForReading] fileDescriptor] ;//: -1;
-    //if (!output)
-    //    [[outPipe fileHandleForReading] closeFile];
-    int out_flags = fcntl(out_fd, F_GETFL, 0);
-    fcntl(out_fd, F_SETFL, out_flags | O_NONBLOCK);
-
-    unsigned char err_buf[TASKIT_BUFFER_LENGTH];
-    int err_fd = /*error ?*/ [[errPipe fileHandleForReading] fileDescriptor] ;//: -1;
-    //if (!error)
-    //    [[errPipe fileHandleForReading] closeFile];
-    int err_flags = fcntl(err_fd, F_GETFL, 0);
-    fcntl(err_fd, F_SETFL, err_flags | O_NONBLOCK);
-    
-
-    
-    while (err_fd != -1 || out_fd != -1) {
-        
-        long out_ev = EAGAIN;
-        long err_ev = EAGAIN;
-        
-        // stdout
-        if (out_fd >= 0) {
-            NSLog(@"READING [out]: %d", out_fd);
-            ssize_t ex = read(out_fd, out_buf, TASKIT_BUFFER_LENGTH);
-            out_ev = errno;
-            NSLog(@"\t(%ld, %d, %d, %d)", ex, out_ev, EAGAIN, EINVAL);
-            if (ex == -1 && out_ev == EAGAIN) {
-                NSLog(@"AGAIN: %d / %d", out_ev, EAGAIN);
-                //out_fd = -1;
-            }
-            else if (ex == -1 && out_ev == EINVAL) {
-                NSLog(@"INVAL: %d / %d", out_ev, EINVAL);
-                out_fd = -1;
-            }
-            else if (ex == -1) {
-                out_fd = -1;
-            }
-            else if (ex == 0) {
-                out_fd = -1;
-            }
-            else {
-                [(NSMutableData *)*output appendBytes:out_buf length:ex];
-            }
-        }
-        
-        // stderr
-        if (err_fd >= 0) {
-            
-            NSLog(@"READING [err]: %d", err_fd);
-            ssize_t ex = read(err_fd, err_buf, TASKIT_BUFFER_LENGTH);
-            err_ev = errno;
-            NSLog(@"\t(%ld, %d)", ex, err_ev);
-            if (ex == -1 && err_ev == EAGAIN) {
-                
-                //err_fd = -1;
-            }
-            else if (ex == -1 && err_ev == EINVAL) {
-                err_fd = -1;
-            }
-            else if (ex == -1) {
-                err_fd = -1;
-            }
-            else if (ex == 0) {
-                err_fd = -1;
-            }
-            else {
-                [(NSMutableData *)*error appendBytes:err_buf length:ex];
-            }
-            NSLog(@"errfd = %d", err_fd);
-        }
-        
-        NSLog(@">>> %d, %d, %d", [self isRunning], out_ev, err_ev);
-        if (![self isRunning] && out_ev == EAGAIN && err_ev == EAGAIN)
-            break;
-    }
-}
-#endif
 - (void)waitForOutputString:(NSString **)output errorString:(NSString **)error {
     NSData *outputData = nil;
     NSData *errorData = nil;
@@ -574,6 +374,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     [receivedErrorData release];
     [receivedErrorString release];
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     [super dealloc];
 }

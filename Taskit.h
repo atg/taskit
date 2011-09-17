@@ -43,6 +43,9 @@ typedef unsigned TaskitWaitMask;
     
     NSMutableData *outputBuffer;
     NSMutableData *errorBuffer;
+    
+    BOOL hasFinishedReadingOutput;
+    BOOL hasFinishedReadingError;
 }
 
 + (id)task;

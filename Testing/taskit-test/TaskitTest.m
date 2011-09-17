@@ -39,7 +39,7 @@
     [task.arguments addObject:@"Hello World"];
     
     task.receivedOutputString = ^void(NSString *output) {
-        NSLog(@"[echo nonblock:output] '%@'", [task waitForOutputString]);
+        NSLog(@"[echo nonblock:output] '%@'", output);
     };
     
     [task launch];
@@ -139,29 +139,5 @@
     NSLog(@"[python:out] '%@'", [task waitForErrorString]);
 }
 #endif
-
-/*
-- (void)test_env {
-    NSLog(@"[[env]]");
-    Taskit *task = [Taskit task];
-    task.launchPath = @"/usr/bin/env";
-    [task.environment setValue:@"BACON" forKey:@"CRISPY"];    
-    [task launch];
-    NSLog(@"[env:out] '%@'", [task waitForOutputString]);
-}
-- (void)test_env2 {
-    NSLog(@"[[env2]]");
-    Taskit *task = [Taskit task];
-    task.launchPath = @"/usr/bin/env";
-    [task populateWithCurrentEnvironment];
-    [task.environment setValue:@"BACON" forKey:@"CRISPY"];
-    task.receivedErrorString = ^void(NSString *output) {
-        NSLog(@"[env:async:out] '%@'", output);
-    };
-    
-    [task launch];
-    [task waitUntilExit];
-}
- */
 
 @end

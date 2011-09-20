@@ -49,6 +49,10 @@ typedef unsigned TaskitWaitMask;
     
     BOOL hasRetainedForOutput;
     BOOL hasRetainedForError;
+    
+    NSTimeInterval timeoutIfNothing;
+    NSTimeInterval timeoutSinceOutput;
+    NSTimeInterval timeoutSinceError;
 }
 
 + (id)task;
@@ -75,19 +79,34 @@ typedef unsigned TaskitWaitMask;
 @property (copy) void (^receivedErrorString)(NSString *errString);
 //TODO: @property (copy) void (^processExited)(NSString *outputString);
 
+#pragma mark Timeouts
+
+// The amount of time to wait if nothing has been read yet
+@property (assign) NSTimeInterval timeoutIfNothing;
+
+// The amount of time to wait for stderr if stdout HAS been read
+@property (assign) NSTimeInterval timeoutSinceOutput;
+
+// The amount of time to wait for stdout if stderr HAS been read
+@property (assign) NSTimeInterval timeoutSinceError;
+
+
 #pragma mark Control
 - (BOOL)launch;
 
-//TODO: - (void)interrupt; // Not always possible. Sends SIGINT.
-//TODO: - (void)terminate; // Not always possible. Sends SIGTERM.
+- (void)interrupt; // Not always possible. Sends SIGINT.
+- (void)terminate; // Not always possible. Sends SIGTERM.
+- (void)kill;
 
-//TODO: - (BOOL)suspend;
-//TODO: - (BOOL)resume;
+- (BOOL)suspend;
+- (BOOL)resume;
+
 
 - (BOOL)isRunning;
 
 #pragma mark Blocking methods
 - (void)waitUntilExit;
+- (BOOL)waitUntilExitWithTimeout:(NSTimeInterval)timeout;
 
 - (void)waitForOutputData:(NSData **)output errorData:(NSData **)error;
 - (void)waitForOutputString:(NSString **)output errorString:(NSString **)error;

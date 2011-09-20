@@ -25,6 +25,15 @@
 @synthesize receivedErrorString;
 //TODO: @synthesize processExited;
 
+@synthesize timeoutIfNothing;
+
+// The amount of time to wait for stdout if stderr HAS been read
+@synthesize timeoutSinceOutput;
+
+// The amount of time to wait for stderr if stdout HAS been read 
+@synthesize timeoutSinceError;
+
+
 + (id)task {
     return [[[[self class] alloc] init] autorelease];
 }
@@ -130,18 +139,32 @@ static const char* CHAllocateCopyString(NSString *str) {
         [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
-    int new_in = [[inPipe fileHandleForReading] fileDescriptor];
-    int new_out = [[outPipe fileHandleForWriting] fileDescriptor];
-    int new_err = [[errPipe fileHandleForWriting] fileDescriptor];
+    int in_parent = [[inPipe fileHandleForWriting] fileDescriptor];
+    int in_child = [[inPipe fileHandleForReading] fileDescriptor];
+    
+    int out_parent = [[outPipe fileHandleForReading] fileDescriptor];
+    int out_child = [[outPipe fileHandleForWriting] fileDescriptor];
+    
+    int err_parent = [[errPipe fileHandleForReading] fileDescriptor];
+    int err_child = [[errPipe fileHandleForWriting] fileDescriptor];
     
 // Execution
     pid_t p = fork();
     if (p == 0) {
         
         // Set up stdin, stdout and stderr
-        dup2(new_in, STDIN_FILENO);
-        dup2(new_out, STDOUT_FILENO);
-        dup2(new_err, STDERR_FILENO);
+        
+        close(in_parent);
+        dup2(in_child, STDIN_FILENO);
+        close(in_child);
+        
+        close(out_parent);
+        dup2(out_child, STDOUT_FILENO);
+        close(out_child);
+        
+        close(err_parent);
+        dup2(err_child, STDERR_FILENO);
+        close(err_child);
         
         chdir(workingDirectoryPath);
         
@@ -159,6 +182,10 @@ static const char* CHAllocateCopyString(NSString *str) {
     }
     else {
         pid = p;
+        
+        close(in_child);
+        close(out_child);
+        close(err_child);
     }
         
     isRunning = YES;
@@ -225,6 +252,34 @@ static const char* CHAllocateCopyString(NSString *str) {
     return 0;
 }
 
+- (void)interrupt // Not always possible. Sends SIGINT.
+{
+    if ([self isRunning])
+        kill(pid, SIGINT);
+}
+- (void)terminate // Not always possible. Sends SIGTERM.
+{
+    if ([self isRunning])
+        kill(pid, SIGTERM);
+}
+- (void)kill
+{
+    [self terminate];
+    
+    if ([self isRunning]) {
+        kill(pid, SIGKILL);
+    }
+}
+- (BOOL)suspend
+{
+    if ([self isRunning])
+        kill(pid, SIGSTOP);
+}
+- (BOOL)resume
+{
+    if ([self isRunning])
+        kill(pid, SIGCONT);
+}
 
 
 #pragma mark Blocking methods
@@ -238,11 +293,40 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         [runloop runMode:@"taskitwait" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
         
-        delay *= 2;
+        delay *= 1.5;
         if (delay >= 1.0)
             delay = 1.0;
     }
 }
+- (BOOL)waitUntilExitWithTimeout:(NSTimeInterval)timeout {
+    
+    NSRunLoop *runloop = [NSRunLoop currentRunLoop];
+    NSTimeInterval delay = 0.01;
+    
+    NSTimeInterval startTime = [NSDate timeIntervalSinceReferenceDate];
+    BOOL hitTimeout = NO;
+    
+    while ([self isRunning]) {
+        
+        NSTimeInterval currentTime = [NSDate timeIntervalSinceReferenceDate];
+        
+        if (timeout > 0 && currentTime - startTime > timeout) {
+            hitTimeout = YES;
+            break;
+        }
+        
+        [runloop runMode:@"taskitwait" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
+        
+        delay *= 1.5;
+        if (delay >= 1.0)
+            delay = 1.0;
+    }
+            
+    if (hitTimeout)
+        [self kill];
+    return hitTimeout;
+}
+
 - (NSData *)waitForOutput {
     
     NSData *ret = nil;
@@ -335,18 +419,87 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (receivedOutputData || receivedOutputString || receivedErrorData || receivedErrorString)
         @throw [[NSException alloc] initWithName:@"TaskitAsyncSyncCombination" reason:@"-waitForOutputData:errorData: called when async output is in use. These two features are mutually exclusive!" userInfo:[NSDictionary dictionary]];
     
+    if (![self isRunning])
+        return;
+    
+    
+    // FOR TESTING ONLY
+    /*
+    NSMutableData *outDataFull = [NSMutableData data];
+    NSData *outData = nil;
+    while ((outData = [[outPipe fileHandleForReading] availableData]) && [outData length]) {
+        [outDataFull appendData:outData];
+    }
+    
+    [[errPipe fileHandleForReading] readDataToEndOfFile];
+    
+    if (output)
+        *output = outDataFull;
+    return;
+    */
+    
+    
     
     NSRunLoop *runloop = [NSRunLoop currentRunLoop];
     NSTimeInterval delay = 0.01;
     
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
+//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
+//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
+//    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
     
-    [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
-    [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     
+    //[[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
+    //[[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
+    
+    [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
+    [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
+    
+    // TODO: Replace this with something more robust
+    NSTimeInterval startTime = [NSDate timeIntervalSinceReferenceDate];
+    NSTimeInterval outputTime = 0;
+    NSTimeInterval errorTime = 0;
+    
+    BOOL hitTimeout = NO;
     do {
+        NSTimeInterval currentTime = [NSDate timeIntervalSinceReferenceDate];
         
+        if (timeoutIfNothing > 0 && currentTime - startTime > timeoutIfNothing) {
+        
+            // If the user has set a timeout for getting no data
+            if ((!output || !hasFinishedReadingOutput) && (!error || !hasFinishedReadingError)) {
+                hitTimeout = YES;
+                break;
+            }
+        }
+        
+        if (outputTime == 0 && hasFinishedReadingOutput)
+            outputTime = currentTime;
+        if (errorTime == 0 && hasFinishedReadingError)
+            errorTime = currentTime;
+        
+        if (timeoutSinceOutput > 0 && currentTime - outputTime > timeoutSinceOutput) {
+            
+            // If the user has set a timeout for getting error if we've received output
+            if (hasFinishedReadingOutput && !hasFinishedReadingError) {
+                hitTimeout = YES;
+                break;
+            }
+        }
+        
+        if (timeoutSinceError > 0 && currentTime - errorTime > timeoutSinceError) {
+            
+            // If the user has set a timeout for getting output if we've received error
+            if (hasFinishedReadingError && !hasFinishedReadingOutput) {
+                hitTimeout = YES;
+                break;
+            }
+        }
+        
+        
+        
+        CHDebug(@"finout = %d     finerr = %d     isrun = %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
         if ((!output || hasFinishedReadingOutput) && (!error || hasFinishedReadingError))
             break;
         
@@ -356,14 +509,26 @@ static const char* CHAllocateCopyString(NSString *str) {
         if (delay >= 0.1)
             delay = 0.1;
         
+        //if (![self isRunning])
+        //    break;
+        
     } while (1); // [self isRunning]);
     
     [outputBuffer autorelease];
     [errorBuffer autorelease];
     
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
+//    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
+//    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
     
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
+    
+    [[outPipe fileHandleForReading] closeFile];
+    [[errPipe fileHandleForReading] closeFile];
+                
+    if (hitTimeout) [self kill];
+                
+                
     if (output)
         *output = outputBuffer;
     if (error)

@@ -227,10 +227,10 @@ static const char* CHAllocateCopyString(NSString *str) {
     isRunning = NO;
     return isRunning;
 }
-- (int)processIdentifier {
+- (NSInteger)processIdentifier {
     return pid;
 }
-- (int)terminationStatus {
+- (NSInteger)terminationStatus {
     if (WIFEXITED(waitpid_status))
         return WEXITSTATUS(waitpid_status);
     
@@ -245,7 +245,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     return 0;
 }
-- (int)terminationSignal {
+- (NSInteger)terminationSignal {
     if (WIFSIGNALED(waitpid_status))
         return WTERMSIG(waitpid_status);
     
@@ -422,6 +422,63 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (![self isRunning])
         return;
     
+    int outfd = [[outPipe fileHandleForReading] fileDescriptor];
+    int errfd = [[errPipe fileHandleForReading] fileDescriptor];
+    
+    int outflags = fcntl(outfd, F_GETFL, 0);
+    fcntl(outfd, F_SETFL, outflags | O_NONBLOCK);
+    
+    int errflags = fcntl(errfd, F_GETFL, 0);
+    fcntl(errfd, F_SETFL, errflags | O_NONBLOCK);
+    
+#define TASKIT_BUFLEN 200
+    
+    char outbuf[TASKIT_BUFLEN];
+    char errbuf[TASKIT_BUFLEN];
+    
+    NSMutableData *outdata = [NSMutableData data];
+    NSMutableData *errdata = [NSMutableData data];
+    
+    BOOL hasFinishedOutput = NO;
+    BOOL hasFinishedError = NO;
+    while (1) {
+        if (!hasFinishedOutput) {
+            int outread = read(outfd, &outbuf, TASKIT_BUFLEN);
+            const volatile int outerrno = errno;
+            if (outread >= 1) {
+                [outdata appendBytes:outbuf length:outread];
+            }
+            else if (outread == 0 || outerrno != EAGAIN) {
+                hasFinishedOutput = YES;
+            }
+        }
+        
+        if (!hasFinishedError) {
+            int errread = read(errfd, &errbuf, TASKIT_BUFLEN);
+            const volatile int errerrno = errno;
+            
+            if (errread >= 1) {
+                [errdata appendBytes:errbuf length:errread];
+            }
+            else if (errread == 0 || errerrno != EAGAIN) {
+                hasFinishedError = YES;
+            }
+        }
+        
+        if (hasFinishedOutput && hasFinishedError) {
+            break;
+        }
+    }
+    
+    
+    if (output)
+        *output = outdata;
+    if (error)
+        *error = errdata;
+
+    return;
+    
+    
     
     // FOR TESTING ONLY
     /*
@@ -499,21 +556,21 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         
         
-        CHDebug(@"finout = %d     finerr = %d     isrun = %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
+        //CHDebug(@"finout = %d     finerr = %d     isrun = %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
         if ((!output || hasFinishedReadingOutput) && (!error || hasFinishedReadingError))
             break;
         
         [runloop runMode:@"taskitread" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
         
-        delay *= 1.5;
-        if (delay >= 0.1)
-            delay = 0.1;
+        //delay *= 1.5;
+        //if (delay >= 0.1)
+        //    delay = 0.1;
         
         //if (![self isRunning])
         //    break;
         
     } while (1); // [self isRunning]);
-    
+    CHDebug(@"FINISHED %d %d %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
     [outputBuffer autorelease];
     [errorBuffer autorelease];
     

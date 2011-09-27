@@ -91,6 +91,13 @@ typedef unsigned TaskitWaitMask;
 @property (assign) NSTimeInterval timeoutSinceError;
 
 
+#pragma mark Status
+- (NSInteger)processIdentifier;
+- (NSInteger)terminationStatus;
+- (NSTaskTerminationReason)terminationReason;
+- (NSInteger)terminationSignal;
+
+
 #pragma mark Control
 - (BOOL)launch;
 

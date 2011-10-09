@@ -33,6 +33,8 @@
 // The amount of time to wait for stderr if stdout HAS been read 
 @synthesize timeoutSinceError;
 
+@synthesize priority;
+
 
 + (id)task {
     return [[[[self class] alloc] init] autorelease];
@@ -51,6 +53,8 @@
     inPipe = [[NSPipe alloc] init];
     outPipe = [[NSPipe alloc] init];
     errPipe = [[NSPipe alloc] init];
+    
+    priority = NSIntegerMax;
     
     return self;
 }
@@ -169,6 +173,10 @@ static const char* CHAllocateCopyString(NSString *str) {
         chdir(workingDirectoryPath);
         
         //sleep(1);
+        
+        int oldpriority = getpriority(PRIO_PROCESS, getpid());
+        if (priority < 20 && priority > -20 && priority > oldpriority)
+            setpriority(PRIO_PROCESS, getpid(), priority);
         
         execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
         

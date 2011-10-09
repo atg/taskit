@@ -53,6 +53,8 @@ typedef unsigned TaskitWaitMask;
     NSTimeInterval timeoutIfNothing;
     NSTimeInterval timeoutSinceOutput;
     NSTimeInterval timeoutSinceError;
+    
+    NSInteger priority;
 }
 
 + (id)task;
@@ -67,6 +69,8 @@ typedef unsigned TaskitWaitMask;
 
 @property (copy) NSData *input;
 @property (copy) NSString *inputString;
+
+@property (assign) NSInteger priority;
 
 - (void)populateWithCurrentEnvironment;
 

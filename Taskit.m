@@ -478,7 +478,6 @@ static const char* CHAllocateCopyString(NSString *str) {
         }
     }
     
-    
     if (output)
         *output = outdata;
     if (error)
@@ -486,38 +485,12 @@ static const char* CHAllocateCopyString(NSString *str) {
 
     return;
     
-    
-    
-    // FOR TESTING ONLY
-    /*
-    NSMutableData *outDataFull = [NSMutableData data];
-    NSData *outData = nil;
-    while ((outData = [[outPipe fileHandleForReading] availableData]) && [outData length]) {
-        [outDataFull appendData:outData];
-    }
-    
-    [[errPipe fileHandleForReading] readDataToEndOfFile];
-    
-    if (output)
-        *output = outDataFull;
-    return;
-    */
-    
-    
-    
     NSRunLoop *runloop = [NSRunLoop currentRunLoop];
     NSTimeInterval delay = 0.01;
     
-//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
-//    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(syncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
-    
-    
-    //[[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
-    //[[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
-    
+        
     [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObject:@"taskitread"]];
     
@@ -562,29 +535,16 @@ static const char* CHAllocateCopyString(NSString *str) {
             }
         }
         
-        
-        
-        //CHDebug(@"finout = %d     finerr = %d     isrun = %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
         if ((!output || hasFinishedReadingOutput) && (!error || hasFinishedReadingError))
             break;
         
         [runloop runMode:@"taskitread" beforeDate:[NSDate dateWithTimeIntervalSinceNow:delay]];
-        
-        //delay *= 1.5;
-        //if (delay >= 0.1)
-        //    delay = 0.1;
-        
-        //if (![self isRunning])
-        //    break;
-        
-    } while (1); // [self isRunning]);
-    CHDebug(@"FINISHED %d %d %d", hasFinishedReadingOutput, hasFinishedReadingError, [self isRunning]);
+                
+    } while (1);
+    
     [outputBuffer autorelease];
     [errorBuffer autorelease];
-    
-//    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-//    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];
-    
+        
     [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];
     

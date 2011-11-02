@@ -158,7 +158,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         // Set up stdin, stdout and stderr
         
-        setsid();
+//        setsid();
         //sigprocmask
         
         close(in_parent);

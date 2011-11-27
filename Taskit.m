@@ -183,6 +183,9 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
         
+        // execve failed for some reason, try to quit gracefullyish
+        exit(0);
+        
         // Uh oh, we shouldn't be here
         abort();
         return NO;

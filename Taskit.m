@@ -17,6 +17,7 @@
 
 @synthesize input;
 @synthesize inputString;
+@synthesize inputPath;
 //TODO: @synthesize usesAuthorization;
 
 @synthesize receivedOutputData;
@@ -143,8 +144,13 @@ static const char* CHAllocateCopyString(NSString *str) {
         [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
+    NSFileHandle* inHandle = [inPipe fileHandleForReading];
+    if ([inputPath length]) {
+        inHandle = [NSFileHandle fileHandleForReadingAtPath:inputPath];
+    }
+    
     int in_parent = [[inPipe fileHandleForWriting] fileDescriptor];
-    int in_child = [[inPipe fileHandleForReading] fileDescriptor];
+    int in_child = [inHandle fileDescriptor];
     
     int out_parent = [[outPipe fileHandleForReading] fileDescriptor];
     int out_child = [[outPipe fileHandleForWriting] fileDescriptor];
@@ -592,7 +598,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     [input release];
     [inputString release];
-        
+    [inputPath release];
+    
     [inPipe release];
     [outPipe release];
     [errPipe release];

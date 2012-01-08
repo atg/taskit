@@ -24,13 +24,14 @@ typedef unsigned TaskitWaitMask;
     
     NSData *input;
     NSString *inputString;
+    NSString* inputPath; // Optional alternative to inputString
     
     //TODO: BOOL usesAuthorization;
     
     NSPipe *inPipe;
     NSPipe *outPipe;
     NSPipe *errPipe;
-        
+    
     pid_t pid;
     int waitpid_status;
     BOOL isRunning;
@@ -69,6 +70,7 @@ typedef unsigned TaskitWaitMask;
 
 @property (copy) NSData *input;
 @property (copy) NSString *inputString;
+@property (copy) NSString *inputPath;
 
 @property (assign) NSInteger priority;
 

@@ -304,6 +304,21 @@ static const char* CHAllocateCopyString(NSString *str) {
 
 #pragma mark Blocking methods
 
+- (void)reapOnExit {
+    if (pid > 0 && [self isRunning]) {
+        dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, pid, DISPATCH_PROC_EXIT, dispatch_get_main_queue());
+        CFRetain(self);
+        if (source) {
+            dispatch_source_set_event_handler(source, ^{
+                CFRelease(self);
+                [self isRunning];
+                dispatch_source_cancel(source);
+                dispatch_release(source);
+            });
+            dispatch_resume(source);
+        }
+    }
+}
 - (void)waitUntilExit {
     
     NSRunLoop *runloop = [NSRunLoop currentRunLoop];

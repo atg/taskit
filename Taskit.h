@@ -116,6 +116,7 @@ typedef unsigned TaskitWaitMask;
 
 
 - (BOOL)isRunning;
+- (void)reapOnExit;
 
 #pragma mark Blocking methods
 - (void)waitUntilExit;

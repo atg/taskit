@@ -310,6 +310,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         CFRetain(self);
         if (source) {
             dispatch_source_set_event_handler(source, ^{
+                CHDebug(@"REAPING");
                 CFRelease(self);
                 [self isRunning];
                 dispatch_source_cancel(source);

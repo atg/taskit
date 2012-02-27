@@ -131,8 +131,10 @@ static const char* CHAllocateCopyString(NSString *str) {
         CFRetain(self);
         hasRetainedForOutput = YES;
         
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
-        [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
+//        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[outPipe fileHandleForReading]];
+//        [[outPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[outPipe fileHandleForReading]];
+        [[outPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
     if (receivedErrorData || receivedErrorString) {
@@ -140,8 +142,10 @@ static const char* CHAllocateCopyString(NSString *str) {
         CFRetain(self);
         hasRetainedForError = YES;
         
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];        
-        [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
+//        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadCompletionNotification object:[errPipe fileHandleForReading]];        
+//        [[errPipe fileHandleForReading] readInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];        
+        [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
     NSFileHandle* inHandle = [inPipe fileHandleForReading];

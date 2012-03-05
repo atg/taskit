@@ -189,7 +189,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         
         int oldpriority = getpriority(PRIO_PROCESS, getpid());
         if (priority < 20 && priority > -20 && priority > oldpriority)
-            setpriority(PRIO_PROCESS, getpid(), priority);
+            setpriority(PRIO_PROCESS, getpid(), (int)priority);
         
         execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
         
@@ -298,11 +298,13 @@ static const char* CHAllocateCopyString(NSString *str) {
 {
     if ([self isRunning])
         kill(pid, SIGSTOP);
+    return [self isRunning];
 }
 - (BOOL)resume
 {
     if ([self isRunning])
         kill(pid, SIGCONT);
+    return [self isRunning];
 }
 
 
@@ -314,7 +316,6 @@ static const char* CHAllocateCopyString(NSString *str) {
         CFRetain(self);
         if (source) {
             dispatch_source_set_event_handler(source, ^{
-                CHDebug(@"REAPING");
                 CFRelease(self);
                 [self isRunning];
                 dispatch_source_cancel(source);
@@ -483,7 +484,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     BOOL hasFinishedError = NO;
     while (1) {
         if (!hasFinishedOutput) {
-            int outread = read(outfd, &outbuf, TASKIT_BUFLEN);
+            int outread = (int)read(outfd, &outbuf, TASKIT_BUFLEN);
             const volatile int outerrno = errno;
             if (outread >= 1) {
                 [outdata appendBytes:outbuf length:outread];
@@ -494,7 +495,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         }
         
         if (!hasFinishedError) {
-            int errread = read(errfd, &errbuf, TASKIT_BUFLEN);
+            int errread = (int)read(errfd, &errbuf, TASKIT_BUFLEN);
             const volatile int errerrno = errno;
             
             if (errread >= 1) {

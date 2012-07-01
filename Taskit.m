@@ -283,8 +283,10 @@ static const char* CHAllocateCopyString(NSString *str) {
 }
 - (void)terminate // Not always possible. Sends SIGTERM.
 {
-    if ([self isRunning])
+    if ([self isRunning]) {
         kill(pid, SIGTERM);
+        [self isRunning];
+    }
 }
 - (void)kill
 {
@@ -292,6 +294,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     if ([self isRunning]) {
         kill(pid, SIGKILL);
+        [self isRunning];
     }
 }
 - (BOOL)suspend

@@ -148,6 +148,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
     
+//    sleep(5);
     NSFileHandle* inHandle = [inPipe fileHandleForReading];
     if ([inputPath length]) {
         inHandle = [NSFileHandle fileHandleForReadingAtPath:inputPath];
@@ -163,14 +164,15 @@ static const char* CHAllocateCopyString(NSString *str) {
     int err_child = [[errPipe fileHandleForWriting] fileDescriptor];
     
 // Execution
+//    return NO;
     pid_t p = fork();
     if (p == 0) {
         
+//        setsid();
+        
         // Set up stdin, stdout and stderr
         
-//        setsid();
         //sigprocmask
-        
         close(in_parent);
         dup2(in_child, STDIN_FILENO);
         close(in_child);
@@ -191,8 +193,13 @@ static const char* CHAllocateCopyString(NSString *str) {
         if (priority < 20 && priority > -20 && priority > oldpriority)
             setpriority(PRIO_PROCESS, getpid(), (int)priority);
         
-        execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
+        // Close any open file handles that are NOT stderr
+        for (int i = getdtablesize(); i >= 3; i--) {
+            close(i);
+        }
         
+        execve(executablePath, (char * const *)argumentsArray, (char * const *)environmentArray);
+  
         // execve failed for some reason, try to quit gracefullyish
         _exit(0);
         
@@ -202,6 +209,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     }
     else if (p == -1) {
         // Error
+        printf("A forking error occurred\n");
         return NO;
     }
     else {

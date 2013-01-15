@@ -122,7 +122,8 @@ typedef unsigned TaskitWaitMask;
 - (void)waitUntilExit;
 - (BOOL)waitUntilExitWithTimeout:(NSTimeInterval)timeout;
 
-- (void)waitForOutputData:(NSData **)output errorData:(NSData **)error;
+- (BOOL)waitForIntoOutputData:(NSMutableData *)output intoErrorData:(NSMutableData *)error;
+- (BOOL)waitForOutputData:(NSData **)output errorData:(NSData **)error;
 - (void)waitForOutputString:(NSString **)output errorString:(NSString **)error;
 
 - (NSData *)waitForOutput;

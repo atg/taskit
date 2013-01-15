@@ -8,6 +8,5 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/darvin/taskit.git",
                      :commit => "e98b48415bf69737d6643cd2f01db05568178140" }
   s.source_files = '*.{h,m}'
-  s.framework = 'Cocoa'
   s.platform = :osx
 end

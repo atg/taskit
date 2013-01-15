@@ -3,6 +3,7 @@
 //  Licensed under the WTFPL: http://sam.zoy.org/wtfpl/
 
 #import <Foundation/Foundation.h>
+#import <Cocoa/Cocoa.h>
 
 typedef enum {
     

@@ -32,6 +32,8 @@ typedef unsigned TaskitWaitMask;
     NSPipe *outPipe;
     NSPipe *errPipe;
     
+    BOOL shouldSetUpFileHandlesAutomatically;
+    
     pid_t pid;
     int waitpid_status;
     BOOL isRunning;
@@ -73,6 +75,9 @@ typedef unsigned TaskitWaitMask;
 @property (copy) NSString *inputPath;
 
 @property (assign) NSInteger priority;
+
+@property (assign) BOOL shouldSetUpFileHandlesAutomatically;
+- (void)setUpFileHandles;
 
 - (void)populateWithCurrentEnvironment;
 

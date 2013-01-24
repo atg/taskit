@@ -57,6 +57,8 @@
     
     priority = NSIntegerMax;
     
+    shouldSetUpFileHandlesAutomatically = YES;
+    
     return self;
 }
 
@@ -238,6 +240,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     if (inputData)
         [[inPipe fileHandleForWriting] writeData:inputData];
     [[inPipe fileHandleForWriting] closeFile];
+    inPipe = nil;
     
     return YES;
 }
@@ -480,10 +483,23 @@ static const char* CHAllocateCopyString(NSString *str) {
     
     return hadWhoopsie;
 }
+@synthesize shouldSetUpFileHandlesAutomatically;
+- (void)setUpFileHandles {
+    int outfd = [[outPipe fileHandleForReading] fileDescriptor];
+    int errfd = [[errPipe fileHandleForReading] fileDescriptor];
+    
+    int outflags = fcntl(outfd, F_GETFL, 0);
+    fcntl(outfd, F_SETFL, outflags | O_NONBLOCK);
+    
+    int errflags = fcntl(errfd, F_GETFL, 0);
+    fcntl(errfd, F_SETFL, errflags | O_NONBLOCK);
+}
 - (BOOL)waitForIntoOutputData:(NSMutableData *)outdata intoErrorData:(NSMutableData *)errdata {
     
     if (receivedOutputData || receivedOutputString || receivedErrorData || receivedErrorString)
         @throw [[NSException alloc] initWithName:@"TaskitAsyncSyncCombination" reason:@"-waitForOutputData:errorData: called when async output is in use. These two features are mutually exclusive!" userInfo:[NSDictionary dictionary]];
+    
+//    return YES;
     
     if (![self isRunning]) {
 //        CHDebug(@"not running!");
@@ -493,11 +509,8 @@ static const char* CHAllocateCopyString(NSString *str) {
     int outfd = [[outPipe fileHandleForReading] fileDescriptor];
     int errfd = [[errPipe fileHandleForReading] fileDescriptor];
     
-    int outflags = fcntl(outfd, F_GETFL, 0);
-    fcntl(outfd, F_SETFL, outflags | O_NONBLOCK);
-    
-    int errflags = fcntl(errfd, F_GETFL, 0);
-    fcntl(errfd, F_SETFL, errflags | O_NONBLOCK);
+    if (shouldSetUpFileHandlesAutomatically)
+        [self setUpFileHandles];
     
 #define TASKIT_BUFLEN 200
     
@@ -572,7 +585,12 @@ static const char* CHAllocateCopyString(NSString *str) {
 
 
 #pragma mark Goodbye!
-
+- (void)end {
+    [[outPipe fileHandleForReading] closeFile];
+    outPipe = nil;
+    [[errPipe fileHandleForReading] closeFile];
+    errPipe = nil;
+}
 - (void)dealloc {
     
     //NSLog(@"Deallocing %@", launchPath);

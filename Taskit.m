@@ -20,10 +20,12 @@
 @synthesize inputPath;
 //TODO: @synthesize usesAuthorization;
 
+#ifdef TASKIT_BACKGROUNDING
 @synthesize receivedOutputData;
 @synthesize receivedOutputString;
 @synthesize receivedErrorData;
 @synthesize receivedErrorString;
+#endif
 //TODO: @synthesize processExited;
 
 @synthesize timeoutIfNothing;
@@ -38,7 +40,7 @@
 
 
 + (id)task {
-    return [[[[self class] alloc] init] autorelease];
+    return [[[self class] alloc] init];
 }
 
 - (id)init {
@@ -63,7 +65,7 @@
 }
 
 static const char* CHAllocateCopyString(NSString *str) {
-    const char* __strong originalString = [str fileSystemRepresentation];
+    const char* originalString = [str fileSystemRepresentation];
     if (!originalString)
         return NULL;
     
@@ -128,6 +130,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     }
     
 // Backgrounding
+#ifdef TASKIT_BACKGROUNDING
     if (receivedOutputData || receivedOutputString) {
         
         CFRetain(self);
@@ -149,7 +152,8 @@ static const char* CHAllocateCopyString(NSString *str) {
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(asyncFileHandleReadCompletion:) name:NSFileHandleReadToEndOfFileCompletionNotification object:[errPipe fileHandleForReading]];        
         [[errPipe fileHandleForReading] readToEndOfFileInBackgroundAndNotifyForModes:[NSArray arrayWithObjects:NSDefaultRunLoopMode, @"taskitwait", nil]];
     }
-    
+#endif
+
 //    sleep(5);
     NSFileHandle* inHandle = [inPipe fileHandleForReading];
     if ([inputPath length]) {
@@ -327,10 +331,14 @@ static const char* CHAllocateCopyString(NSString *str) {
 - (void)reapOnExit {
     if (pid > 0 && [self isRunning]) {
         dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, pid, DISPATCH_PROC_EXIT, dispatch_get_main_queue());
+#if !__has_feature(objc_arc)
         CFRetain(self);
+#endif
         if (source) {
             dispatch_source_set_event_handler(source, ^{
+#if !__has_feature(objc_arc)
                 CFRelease(self);
+#endif
                 [self isRunning];
                 dispatch_source_cancel(source);
                 dispatch_release(source);
@@ -412,6 +420,7 @@ static const char* CHAllocateCopyString(NSString *str) {
     return ret;
 }
 
+#ifdef TASKIT_BACKGROUNDING
 - (void)asyncFileHandleReadCompletion:(NSNotification *)notif {
     
     NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
@@ -449,6 +458,7 @@ static const char* CHAllocateCopyString(NSString *str) {
         }
     }
 }
+#endif
 - (void)syncFileHandleReadCompletion:(NSNotification *)notif {
 
     NSData *data = [[notif userInfo] valueForKey:NSFileHandleNotificationDataItem];
@@ -496,8 +506,8 @@ static const char* CHAllocateCopyString(NSString *str) {
 }
 - (BOOL)waitForIntoOutputData:(NSMutableData *)outdata intoErrorData:(NSMutableData *)errdata {
     
-    if (receivedOutputData || receivedOutputString || receivedErrorData || receivedErrorString)
-        @throw [[NSException alloc] initWithName:@"TaskitAsyncSyncCombination" reason:@"-waitForOutputData:errorData: called when async output is in use. These two features are mutually exclusive!" userInfo:[NSDictionary dictionary]];
+//    if (receivedOutputData || receivedOutputString || receivedErrorData || receivedErrorString)
+//        @throw [[NSException alloc] initWithName:@"TaskitAsyncSyncCombination" reason:@"-waitForOutputData:errorData: called when async output is in use. These two features are mutually exclusive!" userInfo:[NSDictionary dictionary]];
     
 //    return YES;
     
@@ -577,9 +587,9 @@ static const char* CHAllocateCopyString(NSString *str) {
     [self waitForOutputData:output ? &outputData : NULL errorData:error ? &errorData : NULL];
     
     if (outputData)
-        *output = [[[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding] autorelease];
+        *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
     if (errorData)
-        *error = [[[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding] autorelease];
+        *error = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
 }
 
 
@@ -594,29 +604,8 @@ static const char* CHAllocateCopyString(NSString *str) {
 - (void)dealloc {
     
     //NSLog(@"Deallocing %@", launchPath);
-    
-    [launchPath release];
-    [arguments release];
-    [environment release];
-    [workingDirectory release];
-    
-    [input release];
-    [inputString release];
-    [inputPath release];
-    
-    [inPipe release];
-    [outPipe release];
-    [errPipe release];
-    
-    [receivedOutputData release];
-    [receivedOutputString release];
-    
-    [receivedErrorData release];
-    [receivedErrorString release];
-    
+        
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    
-    [super dealloc];
 }
 
 @end

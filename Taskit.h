@@ -38,11 +38,13 @@ typedef unsigned TaskitWaitMask;
     int waitpid_status;
     BOOL isRunning;
     
+#ifdef TASKIT_BACKGROUNDING
     void (^receivedOutputData)(NSData *output);
     void (^receivedOutputString)(NSString *outputString);
     
     void (^receivedErrorData)(NSData *err);
     void (^receivedErrorString)(NSString *errString);
+#endif
     
     NSMutableData *outputBuffer;
     NSMutableData *errorBuffer;
@@ -84,10 +86,13 @@ typedef unsigned TaskitWaitMask;
 //TODO: @property (assign) BOOL usesAuthorization;
 
 #pragma mark Concurrency
+#ifdef TASKIT_BACKGROUNDING
 @property (copy) void (^receivedOutputData)(NSData *output);
 @property (copy) void (^receivedOutputString)(NSString *outputString);
 @property (copy) void (^receivedErrorData)(NSData *err);
 @property (copy) void (^receivedErrorString)(NSString *errString);
+#endif
+
 //TODO: @property (copy) void (^processExited)(NSString *outputString);
 
 #pragma mark Timeouts

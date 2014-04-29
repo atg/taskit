@@ -76,14 +76,14 @@ typedef unsigned TaskitWaitMask;
 @property (copy) NSString *inputString;
 @property (copy) NSString *inputPath;
 
-@property (assign) NSInteger priority;
+@property NSInteger priority;
 
-@property (assign) BOOL shouldSetUpFileHandlesAutomatically;
+@property BOOL shouldSetUpFileHandlesAutomatically;
 - (void)setUpFileHandles;
 
 - (void)populateWithCurrentEnvironment;
 
-//TODO: @property (assign) BOOL usesAuthorization;
+//TODO: @property BOOL usesAuthorization;
 
 #pragma mark Concurrency
 #ifdef TASKIT_BACKGROUNDING
@@ -98,13 +98,13 @@ typedef unsigned TaskitWaitMask;
 #pragma mark Timeouts
 
 // The amount of time to wait if nothing has been read yet
-@property (assign) NSTimeInterval timeoutIfNothing;
+@property NSTimeInterval timeoutIfNothing;
 
 // The amount of time to wait for stderr if stdout HAS been read
-@property (assign) NSTimeInterval timeoutSinceOutput;
+@property NSTimeInterval timeoutSinceOutput;
 
 // The amount of time to wait for stdout if stderr HAS been read
-@property (assign) NSTimeInterval timeoutSinceError;
+@property NSTimeInterval timeoutSinceError;
 
 
 #pragma mark Status
